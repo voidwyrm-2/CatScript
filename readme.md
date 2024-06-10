@@ -4,7 +4,6 @@ This is a (mostly)well written language<br>
 
 Look mom! I used curly brackets instead of `end` blocks!(YOU KNOW WHO YOU ARE)
 
-<br>
 
 ## Instructions on using the language
 **Requirements**
@@ -20,11 +19,11 @@ Look mom! I used curly brackets instead of `end` blocks!(YOU KNOW WHO YOU ARE)
 1. Clone or download this repo
 2. run `run.py` in your terminal/IDE(whatever you're using to run Python)
 
+
 ## Language Documentation
 The language [documentation](./catdocs/maindoc.md)<br>
 If the docs aren't finished, refer to [basic.cat](./scripts/basic.cat), [fib_loop.cat](./scripts/fib_loop.cat), and [fun.pb](./scripts/fun.cat)
 
-<br>
 
 ## License
 [MIT](./LICENSE)
