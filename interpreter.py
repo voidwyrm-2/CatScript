@@ -1,5 +1,6 @@
 from typing import Any
 from random import randint
+import pb_funcs
 
 
 
@@ -38,23 +39,31 @@ class Func:
 
 class DoNotPrint: pass
 def evaluate(vars: dict[str, Any], funcs: dict[str, tuple[bool, Func | Any]], input: str, ln: int) -> tuple[Any, Error | None]:
-    print(funcs)
+    #print(funcs)
+    #print([f + '(' for f in list(funcs)])
+    #print(f"'{input}'")
     if input.startswith(tuple([f + '(' for f in list(funcs)])) and input.endswith(')'):
         s_in = input.removesuffix(')').split('(', 1)
         op_count = s_in[1].count('(')
         cl_count = s_in[1].count(')')
+        
         if op_count > cl_count:
             s_in[1] += (')' * (op_count - cl_count))
         elif op_count < cl_count:
             s_in[1] = ('(' * (cl_count - op_count)) + s_in[1]
-        func_inputs, err = evaluate(vars, funcs, s_in[1].strip(), ln)
+            
+        if s_in[1].strip() != '':
+            func_inputs, err = evaluate(vars, funcs, s_in[1].strip(), ln)
+        else: func_inputs, err = [], None
         if err: return None, err
+        
         if funcs[s_in[0]][0]:
             try:
                 if not isinstance(func_inputs, (list, tuple, set, dict)): func_inputs = [func_inputs]
+                #print(f"finp: '{func_inputs}'")
                 return funcs[s_in[0]][1](ln, *func_inputs)
             except Exception as e:
-                return None, Error('EvalError', e, ln)
+                return None, Error('FuncError', e, ln)
         else:
             return funcs[s_in[0]][1].run(func_inputs, ln)
         #return DoNotPrint(), None
@@ -71,7 +80,7 @@ def evaluate(vars: dict[str, Any], funcs: dict[str, tuple[bool, Func | Any]], in
     elif input.startswith(tuple([v + '=' for v in list(vars)]) + tuple([v + ' =' for v in list(vars)])):
         varname, val = input.split('=', 1)
         varname = varname.strip()
-        if varname in list(vars): return None, Error('VariableError', f"cannot reassign variable '{varname}', doesn't exists", ln)
+        if varname not in list(vars): return None, Error('VariableError', f"cannot reassign variable '{varname}', doesn't exists", ln)
         c_val, err = evaluate(vars, funcs, val.strip(), ln)
         if err: return err
         vars[varname] = c_val
@@ -83,8 +92,27 @@ def evaluate(vars: dict[str, Any], funcs: dict[str, tuple[bool, Func | Any]], in
 
 
 
+def clean_line(line: str):
+    line = line.strip()
+    if '//' not in line: return line
+    in_str = 0
+    ignore_quote = False
+    for cn, c in enumerate(line):
+        if c == '"' and not ignore_quote:
+            in_str = not in_str
+        elif c == '\\': in_str = 2
+        elif c == '/' and not in_str:
+            try:
+                if line[cn + 1] == '/':
+                    return line[:len(line)-(cn)].strip()
+            except IndexError:
+                return line
+        if in_str: in_str -= 1
+    return line
+
+
 def run_code(text: str | list[str], used_stack: list[str] = [], return_values: bool = False, injected_vars: dict[str, Any] | None = None, injected_funcs: dict[str, Func | Any] | None = None) -> tuple[int, tuple[dict[str, Any], dict[str, Func]] | Any | None]:
-    lines: list[str] = [l.split('`', 1)[0].strip() for l in text.replace('null', 'None').splitlines()] if isinstance(text, str) else list(text)
+    lines: list[str] = [clean_line(l) for l in text.replace('null', 'None').splitlines()] if isinstance(text, str) else list(text)
 
     if_to_end: dict[int, tuple[bool, bool, int]] = {}
     if_to_elseifs: dict[int, list[int]] = {}
@@ -148,7 +176,7 @@ def run_code(text: str | list[str], used_stack: list[str] = [], return_values: b
 
         'Rand': (True, lambda ln, min, max: ((randint(min, max), None) if min <= max else (None, Error('ValueError', f"arg 'min' cannot be higher than arg 'max' of Rand", ln))) if isinstance(min, int) and isinstance(max, int) else (None, Error('ValueError', f"invalid value '{min}' for arg 'min' of Rand, expected int", ln)) if not isinstance(min, int) and isinstance(max, int) else (None, Error('ValueError', f"invalid value '{max}' for arg 'max' of Rand, expected int", ln)) if isinstance(min, int) and not isinstance(max, int) else (None, Error('ValueError', f"invalid value '{min}' for arg 'min' and '{max}' for arg 'max' of Rand, expected int and int", ln))),
 
-        'IsMain': (True, lambda ln: not len(used_stack))
+        'IsMain': (True, lambda ln: (not len(used_stack), None))
     }
 
     ln = 0
@@ -165,4 +193,5 @@ def run_code(text: str | list[str], used_stack: list[str] = [], return_values: b
 
 
 #['()', '[1, 2, 3, 4, 5]', '"AHHHH"', "` wow would you look at that it's a comment"]
-run_code(['Print("Hello, Catdog!")', 'Print(Casefold("ABCD"))', 'lt x = 10', 'lt y = x / 2', 'Print(x, y)', 'Print(Rand(1, 10))', 'Print(IsMain())'])
+
+#run_code(['Print("Hello, Catdog!")', 'Print(Casefold("ABCD"))', 'lt x = 10', 'lt y = x / 2', 'Print(x, y)', 'Print(Rand(1, 10))', 'Print(IsMain())', 'x = "WHAT"', 'print(x)'])

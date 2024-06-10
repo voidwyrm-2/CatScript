@@ -1,8 +1,6 @@
-# Pybasic
-I wanna say this language is based on BASIC, but it's really not<br>
-My thought process was more like, "Man BASIC is cool... I should another language to fuel my crippling 'making new programming languages' addiction"
-
-Anyway, this is a language, that's for sure<br>
+# CatScript
+Hi<br>
+This is a (mostly)well written language<br>
 
 Look mom! I used curly brackets instead of `end` blocks!(YOU KNOW WHO YOU ARE)
 
@@ -23,8 +21,8 @@ Look mom! I used curly brackets instead of `end` blocks!(YOU KNOW WHO YOU ARE)
 2. run `run.py` in your terminal/IDE(whatever you're using to run Python)
 
 ## Language Documentation
-Refer to [basic.pb](./scripts/basic.pb), [fib_loop.pb](./scripts/fib_loop.pb), and [fun.pb](./scripts/fun.pb)<br>
-(I'll make actual documentation later)
+The language [documentation](./catdocs/maindoc.md)<br>
+If the docs aren't finished, refer to [basic.cat](./scripts/basic.cat), [fib_loop.cat](./scripts/fib_loop.cat), and [fun.pb](./scripts/fun.cat)
 
 <br>
 
