@@ -1,11 +1,11 @@
-fn fib_rec(n) {
+fn FibRec(n) {
     if n < 2 {
         return n
     }
     
-    return fib_rec(n - 1) + fib_rec(n - 2)
+    return FibRec(n - 1) + FibRec(n - 2)
 }
 
 if IsMain() {
-    fib_rec(10)
+    FibRec(10)
 }

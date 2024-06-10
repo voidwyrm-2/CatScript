@@ -1,1 +1,10 @@
-fn prn()
+fn TestPrint(str, addition?) {
+    if NotGiven(addition) {
+        addition = ""
+    }
+    Println(str + end)
+}
+
+TestPrint("Hello!")
+
+TestPrint("Hello", " there.")

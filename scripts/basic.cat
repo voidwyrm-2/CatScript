@@ -1,8 +1,8 @@
 lt hw = "Hello, Catdog!"
 
-print(hw)
+Println(hw)
 
 
 for i = 0, 10 {
-    print(i)
+    Println(i)
 }

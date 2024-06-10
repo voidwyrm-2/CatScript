@@ -1,9 +1,9 @@
-fn fib_loop(n) {
+fn FibLoop(n) {
     lt a = 0
     lt b = 1
     lt c = 0
     for i = 0, n {
-        print(a)
+        Println(a)
         c = a + b
         b = a
         a = c
@@ -11,4 +11,4 @@ fn fib_loop(n) {
 }
 
 
-fib_loop(10)
+FibLoop(10)
