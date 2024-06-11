@@ -1,7 +1,4 @@
-fn TestPrint(str, addition?) {
-    if NotGiven(addition) {
-        addition = ""
-    }
+fn TestPrint(str, end? = "") {
     Println(str + end)
 }
 
