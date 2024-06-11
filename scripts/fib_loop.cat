@@ -1,10 +1,9 @@
 fn FibLoop(n) {
     lt a = 0
     lt b = 1
-    lt c = 0
     for i = 0, n {
         Println(a)
-        c = a + b
+        lt c = a + b
         b = a
         a = c
     }

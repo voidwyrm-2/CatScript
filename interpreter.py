@@ -42,7 +42,7 @@ def generate_dict(entries: list[tuple[Any, set[Any]]]) -> dict[Any, Any]:
     return out
 
 
-CATSCRIPT_TYPES = generate_dict([ ('Int', ['int', 'integer']), ('Float', 'float'), ('String', ['string', 'str']), ('List', 'list'), ('Tuple', 'tuple'), ('Dict', ['dict', 'dictionary']), ('Set', 'set'), ('Null', ['null', 'nil', 'none']) ])
+CATSCRIPT_TYPES = generate_dict([ ('Int', ['int', 'integer']), ('Float', 'float'), ('String', ['string', 'str']), ('List', 'list'), ('Tuple', 'tuple'), ('Dict', ['dict', 'dictionary']), ('Set', 'set'), ('Null', ['null', 'nil', 'none', 'nonetype']) ])
 def to_catscript_type(t: str) -> str:
     return CATSCRIPT_TYPES.get(t.casefold(), t.casefold().capitalize())
 
@@ -50,7 +50,7 @@ def to_catscript_type(t: str) -> str:
 
 class Error:
     "This class usually causes the interpreter to call `error()` on the class and print the result, then return an error code of `-1`"
-    def __init__(self, _type: str | None = None, details: str | None = None, ln: int | tuple[int, int] | None = None) -> None:
+    def __init__(self, _type: str | None = None, details: str | None = None, ln: int | tuple[int, int] | tuple[int, int, int] | None = None) -> None:
         self.__type: str = _type if _type else 'Error'
         self.__details: str = details
         self.__ln: int | tuple[int, int] | None = ln
@@ -99,6 +99,9 @@ class Error:
     def EvalErr(details: str, linenum: str):
         return Error('EvaluationError', details, linenum)
     
+    def TypeErr(details: str, linenum: str):
+        return Error('TypeError', details, linenum)
+    
     def NoPrint(linenum: int):
         "This error causes the interpreter to act as if there is an error, but not print it's details"
         return Error('NoPrint', "This error causes the interpreter to act as if there is an error, but not print it's details", linenum)
@@ -126,7 +129,7 @@ class ArgNotGiven:
     def __repr__(self) -> str: return 'ArgNotGiven'
 
 class Func:
-    def __init__(self, name: str, code: list[str], args: list[tuple[str, bool, Any | None]], desciption: str = '') -> None:
+    def __init__(self, name: str, code: list[str], args: list[tuple[str, bool, Any | None]] = [], desciption: str = '[no description]') -> None:
         self.__name: str = name
         self.__desc: str = desciption
         self.__code: list[str] = code
@@ -136,8 +139,37 @@ class Func:
 
     def desc(self) -> str: return self.__desc
 
-    def run(self, inputs: list[Any], ln: int) -> tuple[int, tuple[dict[str, Any], dict[str, object]]] | tuple[int, Any]:
-        pass
+    def run(self, vars: dict[str, Any], funcs: dict[str, tuple[bool, Any]], lines: list[str], used_stack: list[str], ln: int, inputs: list[Any]) -> tuple[int, tuple[dict[str, Any], dict[str, object], Any] | None, Error | None]:
+        #print(self.__args)
+        #print(inputs)
+        if len(inputs) > len(self.__args):
+            return -1, None, Error('FuncError', f"expected {len(self.__args)} arguments, but {len(inputs)} were given", ln)
+        
+        formatted_inputs = []
+
+        for n, i in enumerate(inputs):
+            formatted_inputs.append((self.__args[n][0], i))
+        if len(formatted_inputs) < len(self.__args):
+            if not self.__args[len(formatted_inputs)][1]:
+                return -1, None, Error('FuncError', f"expected {len(self.__args)} arguments, but {len(formatted_inputs)} were given", ln)
+            else:
+                for a in self.__args[len(formatted_inputs):]:
+                    formatted_inputs.append((a[0], a[2]))
+        
+        run_res = run_code(self.__code, used_stack, True, injected_vars=concat_dict(vars, formatted_inputs), injected_funcs=funcs.copy())
+        return (*run_res, None)
+
+
+def process_args(args: list[str], vars: dict[str, Any], funcs: dict[str, tuple[bool, Func | Any]], lines: list[str], used_stack: list[str], ln: int) -> tuple[list[tuple[str, bool, Any | None]], Error | None]:
+    out: list[tuple[str, bool, Any | None]] = []
+    for a in args:
+        if '=' in a:
+            argname, arg_default = a.split('=', 1)
+            c_arg_default, arg_def_err = evaluate(vars, funcs, arg_default.strip(), lines, used_stack, ln)
+            if arg_def_err: return None, arg_def_err
+            out.append((argname.strip(), True, c_arg_default))
+        else: out.append((a, False, None))
+    return out, None
 
 
 
@@ -145,31 +177,47 @@ def get_char_not_in_str(string: str, char: str, quote_char: str = '"', nth_char_
     '''Returns the index of `char` in the given string
     Returns `-1` if the char is not found'''
     if char not in string: return -1
-    in_str = 0
-    ignore_quote = False
+    in_str = False
+    ignore_quote = 0
     char_count = 0 if nth_char_to_get - 1 < 0 else nth_char_to_get - 1
     for cn, c in enumerate(string):
         if c == quote_char and not ignore_quote:
             in_str = not in_str
-        elif c == '\\' and respect_escapes and in_str: in_str = 2
+        elif c == '\\' and respect_escapes and in_str: ignore_quote = 2
         elif c == char and not in_str:
             if char_count: char_count -= 1
             else: return cn
-        if in_str: in_str -= 1
+        if ignore_quote: ignore_quote -= 1
     return -1
 
 
-def collect_until_token(lines: list[str], ln: int, token: str = '}') -> tuple[list[str], Error | None]:
+def split_by_chars_not_in_str(string: str, char: str, strip_splits: bool = False, quote_char: str = '"', respect_escapes: bool = True) -> list[str]:
+    if char not in string: return [string]
+    out: list[str] = []
+    current = string
+    while char in current:
+        char_index = get_char_not_in_str(current, char, quote_char, 1, respect_escapes)
+        if char_index == -1: out.append(current); return out
+        o, _, next = split_str_by_index(current, char_index)
+        if strip_splits: out.append(o.strip())
+        else: out.append(o)
+        current = next
+    if strip_splits: out.append(current.strip())
+    else: out.append(current)
+    return out
+
+
+def collect_until_token(lines: list[str], ln: int, closing_token: str = '}', opening_token: str = '{') -> tuple[list[str], Error | None]:
     out = []
     nest = 0
     for l in lines:
-        if l == '}':
+        if l == closing_token:
             if nest: out.append(l); nest -= 1
             else: return out, None
         else:
-            if l.endswith('{'): nest += 1
+            if l.endswith(opening_token) and not l.startswith(closing_token): nest += 1
             out.append(l)
-    return None, Error.SyntaxErr("expected '}', but found end of file", ln)
+    return None, Error.SyntaxErr(f"expected '{closing_token}', but found end of file", ln)
 
 
 def get_index_of_next_token_if(lines: list[str], ln: int, endcode: int = 0) -> tuple[int, Error | None]: # , tokens: str | tuple[str] = '}'):
@@ -182,23 +230,25 @@ def get_index_of_next_token_if(lines: list[str], ln: int, endcode: int = 0) -> t
     nest: list[bool] = []
     for n, l in enumerate(lines):
         #print(n, endcode, nest, f"'{l}'")
-        if l.endswith('{') and l not in ('} else {', '}else {', '} else{', '}else{') and not l.startswith(('} elseif ', '}elseif ')):
+        if l.endswith('{') and not l.startswith('}'):
             if l.startswith('if '): nest.append(True)
             else: nest.append(False)
-        elif l == '}' and l not in ('} else {', '}else {', '} else{', '}else{') and not l.startswith(('} elseif ', '}elseif ')):
+        elif l == '}':
             if len(nest): nest.pop()
             elif endcode <= 0: return (n + 1) + ln, None
             else: return -1, None
         elif l in ('} else {', '}else {', '} else{', '}else{'):
-            if len(nest):
-                nested = nest.pop()
-                if not nested: return None, Error.SyntaxErr("unexpected else", ln)
-            elif endcode == 1: return (n + 1) + ln, None
-        elif l.startswith(('} elseif ', '}elseif ')):
-            if len(nest):
-                nested = nest.pop()
-                if not nested: return None, Error.SyntaxErr("unexpected elseif", ln)
-            elif endcode >= 2: return (n + 1) + ln, None
+            if endcode == 1:
+                if len(nest):
+                    if not nest[-1]:
+                        return None, Error.SyntaxErr("unexpected else", ln)
+                else: return (n + 1) + ln, None
+        elif l.startswith(('} elseif ', '}elseif ')) and l.endswith('{'):
+            if endcode >= 2:
+                if len(nest):
+                    if not nest[-1]:
+                        return None, Error.SyntaxErr("unexpected elseif", ln)
+                else: return (n + 1) + ln, None
     return None, Error.SyntaxErr("expected '}', '} else {', or '} elseif {', but found end of file", ln)
 
 
@@ -235,8 +285,39 @@ def evaluate(vars: dict[str, Any], funcs: dict[str, tuple[bool, Func | Any]], in
             except Exception as e:
                 return None, Error('FuncError', e, ln)
         else:
-            return funcs[funcname][1].run(func_inputs, ln)
+            if not isinstance(func_inputs, (list, tuple, set, dict)): func_inputs = [func_inputs]
+            func_errcode, func_res, func_err = funcs[funcname][1].run(vars, funcs, lines, used_stack, ln, func_inputs)
+            if func_err: return None, func_err
+            if func_errcode < 0:
+                return None, Error.NoPrint(ln)
+            elif func_errcode == 1:
+                return None, Error.Exit(ln)
+            else:
+                new_vars, new_funcs, func_returned = func_res
+                for varkey in new_vars:
+                    if varkey in list(vars): vars[varkey] = new_vars[varkey]
+                for funckey in new_funcs:
+                    if funckey in list(funcs): funcs[funckey] = new_funcs[funckey]
+                
+                if func_errcode == 2:
+                    return func_returned, None
+                else: return None, None
         #return None, None
+
+    elif input.startswith('fn ') and '(' in input and input.endswith((') {', '){')):
+        funcname, args_raw = input.removeprefix('fn ').removesuffix(') {').removesuffix('){').split('(', 1)
+        funcname, args_raw = funcname.strip(), args_raw.strip()
+
+        args_raw_split = split_by_chars_not_in_str(args_raw, ',', True)
+
+        processed_args, p_args_err = process_args(args_raw_split, vars, funcs, lines, used_stack, ln)
+        if p_args_err: return None, p_args_err
+        
+        func_lines, func_lines_err = collect_until_token(lines[ln:], ln)
+        if func_lines_err: return None, func_lines_err
+        
+        funcs[funcname] = (False, Func(funcname, func_lines, processed_args))
+        return None, Error.LineJump((ln, (ln + len(func_lines)) + 2))
 
     elif input.startswith('lt ') and '=' in input:
         varname, val = input.removeprefix('lt ').split('=', 1)
@@ -335,6 +416,8 @@ def evaluate(vars: dict[str, Any], funcs: dict[str, tuple[bool, Func | Any]], in
             return None, Error.ValueErr('goto', 'Int', e_linenum, ln)
         if e_linenum == ln:
             return None, Error('OutOfIndexError', f"cannot use goto to jump to the same line", ln)
+        elif e_linenum < 1 or e_linenum > len(lines)+1:
+            return None, Error('OutOfIndexError', f"{e_linenum} is not a valid line", ln)
         return None, Error.LineJump((ln, e_linenum))
 
     #print(f"'{input}'")
@@ -364,7 +447,7 @@ def clean_line(line: str):
     return line
 
 
-def run_code(text: str | list[str], used_stack: list[str] = [], return_values: bool = False, injected_vars: dict[str, Any] | None = None, injected_funcs: dict[str, Func | Any] | None = None) -> tuple[int, tuple[dict[str, Any], dict[str, Func]] | Any | None]:
+def run_code(text: str | list[str], used_stack: list[str] = [], return_values: bool = False, injected_vars: dict[str, Any] | None = None, injected_funcs: dict[str, Func | Any] | None = None) -> tuple[int, tuple[dict[str, Any], dict[str, Func]] | None]:
     lines: list[str] = [clean_line(l) for l in text.replace('null', 'None').replace('true', 'True').replace('false', 'False').splitlines()] if isinstance(text, str) else list(text)
 
     vars: dict[str, Any] = injected_vars if isinstance(injected_vars, dict) else {}
@@ -385,9 +468,13 @@ def run_code(text: str | list[str], used_stack: list[str] = [], return_values: b
 
         'Sleep': (True, lambda ln, seconds: (time.sleep(seconds), None) if isinstance(seconds, (int, float)) else (None, Error.ValueErr('Sleep', 'Float or Int', seconds, ln)) ),
 
+        'Exit': (True, lambda ln: (None, Error.Exit(ln))),
+
+        'Len': (True, lambda ln, obj: (len(obj), None) if cat_funcs.can_get_length(obj) else (None, Error.TypeErr(f"'{to_catscript_type(type(obj).__name__)}' does not have a length", ln)))
+
         #'NotGiven': (True, lambda ln, arg: (isinstance(arg, ArgNotGiven), None)),
 
-        #'Range': (True, )
+        #'Help': (True, lambda ln, x: print(f"help for function '{x.name()}':\n{x.desc()}") if isinstance(x, Func) else help(x)),
     }
 
 
@@ -397,12 +484,14 @@ def run_code(text: str | list[str], used_stack: list[str] = [], return_values: b
     #print(printing_vars)
 
     ln = 0
-    scheduled_ln: tuple[int, int] | tuple[None, None] = None, None
+    scheduled_ln: list[tuple[int, int, int]] = []
     while ln < len(lines):
-        if ln == scheduled_ln[0]:
-            ln = scheduled_ln[1]
-            scheduled_ln = None, None
-            continue
+        #print(ln, scheduled_ln)
+        if len(scheduled_ln):
+            if ln == scheduled_ln[-1][1]:
+                ln = scheduled_ln[-1][2]
+                scheduled_ln.pop()
+                continue
         l = lines[ln]
         if not l: ln += 1; continue
         #print(l)
@@ -410,20 +499,23 @@ def run_code(text: str | list[str], used_stack: list[str] = [], return_values: b
         if err:
             match err.type():
                 case 'LineJump':
-                    orig_ln, new_ln = err.ln()
-                    if new_ln < 1 or new_ln > len(lines)+1:
-                        print(Error('OutOfIndexError', f"{new_ln} is not a valid line", orig_ln).error())
-                        return -1, None
+                    _, new_ln = err.ln()
                     ln = new_ln - 1
+                    rm = []
+                    for i, sln in enumerate(scheduled_ln):
+                        if sln[0] >= ln: rm.append(i)
+                    #print('rm:', rm)
+                    rm.reverse()
+                    for r in rm: del scheduled_ln[r]
                     continue
                 case 'ScheduledLineJump':
                     orig_ln, jump_at, jump_to = err.ln()
-                    scheduled_ln = jump_at - 1, jump_to - 1
+                    scheduled_ln.append((orig_ln, jump_at - 1, jump_to - 1))
                 case 'Exit':
                     if return_values: return 1, (vars, funcs)
                     return 1, None
                 case 'Return':
-                    return 2, line_res
+                    return 2, (vars, funcs, line_res)
                 case 'NoPrint':
                     return -1, None
                 case other:
@@ -431,7 +523,7 @@ def run_code(text: str | list[str], used_stack: list[str] = [], return_values: b
                     return -1, None
         ln += 1
     
-    if return_values: return 0, (vars, funcs)
+    if return_values: return 0, (vars, funcs, None)
     return 0, None
 
 
@@ -451,11 +543,21 @@ def run_code(text: str | list[str], used_stack: list[str] = [], return_values: b
 #    Println(i)
 #}''')
 
-run_code('''lt x = 12
-if x == 10 {
-    Println("hi!")
-} elseif x == 11 {
-    Println("no thank you")
-} else {
-    Println("go away!")
-}''')
+#run_code('''lt x = 14
+#if x == 10 {
+#    Println("hi!")
+#} elseif x == 11 {
+#    Println("no thank you")
+#} elseif x == 12 {
+#    Println("AHHHH")
+#} else {
+#    Println("go away!")
+#}''')
+
+#run_code('''fn TestPrint(str, end = "") {
+#    Println(str + end)
+#}
+#
+#TestPrint("Hello!")
+#
+#TestPrint("Hello", " there.")''')

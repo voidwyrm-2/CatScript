@@ -21,3 +21,11 @@ def split_str_by_index(string: str, index: int, error_if_index_to_big: bool = Tr
             raise IndexError(f"index {index} is out of range of string(len {len(string)})")
         return string, '', ''
     return string[:index+1], string[index], string[index+1:]
+
+
+def can_get_length(thing: Any):
+    try:
+        len(thing)
+        return True
+    except Exception:
+        return False

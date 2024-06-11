@@ -1,0 +1,16 @@
+fn fizzbuzz(n) {
+    for i = 1, n + 1 {
+        if not i % 3 and not i % 5 {
+            Println("fizzbuzz")
+        } elseif not n % 3 {
+            Println("fizz")
+        } elseif not i % 5 {
+            Println("buzz")
+        } else {
+            Println(i)
+        }
+    }
+}
+
+
+fizzbuzz(100)

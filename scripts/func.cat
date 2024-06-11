@@ -1,4 +1,4 @@
-fn TestPrint(str, end? = "") {
+fn TestPrint(str, end = "") {
     Println(str + end)
 }
 

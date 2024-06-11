@@ -22,7 +22,7 @@ Look mom! I used curly brackets instead of `end` blocks!(YOU KNOW WHO YOU ARE)
 
 ## Language Documentation
 The language [documentation](./catdocs/maindoc.md)<br>
-If the docs aren't finished, refer to [basic.cat](./scripts/basic.cat), [fib_loop.cat](./scripts/fib_loop.cat), and [fun.pb](./scripts/fun.cat)
+If the docs aren't finished, refer to [basic.cat](./scripts/basic.cat), [fib_loop.cat](./scripts/fib_loop.cat), [fun.cat](./scripts/fun.cat), and [fizzbuzz.cat](./scripts/fizzbuzz.cat)
 
 
 ## License

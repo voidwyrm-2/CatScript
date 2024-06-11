@@ -1,25 +1,30 @@
 lt userInput = ""
-userInput = Lower(GetText("please type something"))
+userInput = Lower(GetText("type 'exit', 'again', or 'fun'\n"))
 
 if userInput == "exit" {
     Println("exiting...")
-    Exit(0)
+    Exit()
 } elseif userInput == "again" {
     goto 2
 } elseif userInput == "fun" {
-    Println("the Spongebob or Plankton?")
     lt reply = ""
-    reply = Lower(GetText())
+    reply = Lower(GetText("Spongebob or Plankton?\n"))
     if reply == "spongebob" {
+        Sleep(0.3)
         Println("'F' is for friends who do stuff together,")
+        Sleep(1.2)
         Println("'U' is for you and me,")
+        Sleep(1.2)
         Println("'N' is for anywhere and any time at all, down here in the deep blue sea!")
     } elseif reply == "plankton" {
+        Sleep(0.3)
         Println("'F' is for fire that burns down the whole town,")
+        Sleep(1.2)
         Println("'U' is for Uranium. BOMBS!")
+        Sleep(1.2)
         Println("'N' is for no survivors when you-")
     } else {
         Println("invalid response")
-        goto 12
+        goto 11
     }
 }
